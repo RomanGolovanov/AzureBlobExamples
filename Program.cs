@@ -1,8 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Azure.Storage;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Configuration;
 
@@ -53,7 +54,7 @@ namespace AzureBlobExamples
         {
             var blobClient = container.GetBlockBlobClient($"app-{Guid.NewGuid():N}");
 
-            var uploadTime = await UploadBlockBlobAsync(blobClient, content, blockCount).WrapDuration();
+            var uploadTime = await blobClient.UploadUsingMultipleBlocksAsync(content, blockCount).WrapDuration();
 
             var (downloadedContent, downloadTime) = await blobClient.DownloadContentAsync().WrapDuration();
             
@@ -66,33 +67,8 @@ namespace AzureBlobExamples
                 $"block size: {content.Length / blockCount}, " +
                 $"upload time: {uploadTime}, " +
                 $"download time: {downloadTime}, " +
-                $"delete time: {deleteTime}, content valid: {contentValid}");
-        }
-
-        private static async Task UploadBlockBlobAsync(BlockBlobClient client, byte[] content, int blockCount)
-        {
-            var position = 0;
-            var blockSize = content.Length / blockCount;
-            var blockIds = new List<string>();
-
-            var tasks = new List<Task>();
-
-            while (position < content.Length)
-            {
-                var blockId = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
-                blockIds.Add(blockId);
-                tasks.Add(UploadBlockAsync(client, blockId, content, position, blockSize));
-                position += blockSize;
-            }
-
-            await Task.WhenAll(tasks);
-            await client.CommitBlockListAsync(blockIds);
-        }
-
-        private static async Task UploadBlockAsync(BlockBlobClient client, string blockId, byte[] content, int position, int blockSize)
-        {
-            await using var blockContent = new MemoryStream(content, position, Math.Min(blockSize, content.Length - position));
-            await client.StageBlockAsync(blockId, blockContent);
+                $"delete time: {deleteTime}, " +
+                $"content valid: {contentValid}");
         }
     }
 }
